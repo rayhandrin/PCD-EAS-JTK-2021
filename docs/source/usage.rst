@@ -35,7 +35,7 @@ For example:
 Bagian 1 - Chose Your Input Image
 ----------------------------------
 
-Ini merupakan bagian awal dari proses manipulasi gambar, yaitu dengan memilih terlebih dahulu gambar input yang nantinya akan diaplikasikan style dari gambar style reference.
+Ini merupakan bagian awal dari proses manipulasi gambar, yaitu dengan memilih terlebih dahulu gambar input yang nantinya akan diaplikasikan style dari gambar style reference:
 
 .. codeblock::
    """
@@ -71,3 +71,8 @@ Ini merupakan bagian awal dari proses manipulasi gambar, yaitu dengan memilih te
 
        # Display the input face
        st.image(filepath, caption="Input Image", width=300)
+
+Bagian 2 - Chose Your Own Style
+-------------------------------
+
+Ini merupakan tahap kedua dari proses manipulasi gambar, yaitu dengan memilihi gambar style reference yang akan diekstrak style-nya dan diaplikasikan pada gambar input:

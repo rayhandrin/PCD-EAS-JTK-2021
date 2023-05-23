@@ -37,7 +37,7 @@ Bagian 1 - Chose Your Input Image
 
 Ini merupakan bagian awal dari proses manipulasi gambar, yaitu dengan memilih terlebih dahulu gambar input yang nantinya akan diaplikasikan style dari gambar style reference:
 
-.. codeblock::
+.. 
    """
    Bagian  : Proses Input Gambar - Tahap 1
    Revisi  : 1

@@ -107,129 +107,129 @@ Bagian 3 - Finetune StyleGAN
 ----------------------------
 Ini merupakan tahap ke-3 dari proses manipulasi gambar, yaitu proses di mana styleGAN akan dilakukan finetuning untuk menyesuaikan keinginan pengguna.
 
-.. code-block:
+.. code-block::
 
-       """
-       Bagian  : Fintune StyleGAN - Tahap 3
-       Revisi  : 1
-       Tanggal : 2023/05/31
-       """
-       # alpha controls the strength of the style
-       alpha = st.slider("Style Strength", 0.0, 1.0, 0.5, 0.1)
-       alpha = 1 - alpha
+   """
+   Bagian  : Fintune StyleGAN - Tahap 3
+   Revisi  : 1
+   Tanggal : 2023/05/31
+   """
+   # alpha controls the strength of the style
+   alpha = st.slider("Style Strength", 0.0, 1.0, 0.5, 0.1)
+   alpha = 1 - alpha
 
-       # Tries to preserve color of original image by limiting family of allowable transformations. Set to false if you want to transfer color from reference image. This also leads to heavier stylization
-       preserve_color = st.checkbox("Preserve Color", value=False)
+   # Tries to preserve color of original image by limiting family of allowable transformations. Set to false if you want to transfer color from reference image. This also leads to heavier stylization
+   preserve_color = st.checkbox("Preserve Color", value=False)
 
-       # Number of finetuning steps. Different style reference may require different iterations. Try 200~500 iterations.
-       # But, we limit the number of iterations to 350 for performance reasons.
-       num_iter = st.number_input(
-           "Number of iterations", value=200, step=1, min_value=200, max_value=350
-       )
+   # Number of finetuning steps. Different style reference may require different iterations. Try 200~500 iterations.
+   # But, we limit the number of iterations to 350 for performance reasons.
+   num_iter = st.number_input(
+     "Number of iterations", value=200, step=1, min_value=200, max_value=350
+   )
 
-       # Log training on wandb and interval for image logging
-       use_wandb = st.checkbox("Use wandb", value=False)
-       log_interval = st.number_input(
-           "Log interval", value=10, step=1, min_value=1, max_value=100
-       )
+   # Log training on wandb and interval for image logging
+   use_wandb = st.checkbox("Use wandb", value=False)
+   log_interval = st.number_input(
+     "Log interval", value=10, step=1, min_value=1, max_value=100
+   )
 
-       if use_wandb:
-           wandb.init(project="JoJoGAN")
-           config = wandb.config
-           config.num_iter = num_iter
-           config.preserve_color = preserve_color
-           wandb.log(
-               {"Style reference": [wandb.Image(transforms.ToPILImage()(target_im))]}, step=0
-           )
+   if use_wandb:
+     wandb.init(project="JoJoGAN")
+     config = wandb.config
+     config.num_iter = num_iter
+     config.preserve_color = preserve_color
+     wandb.log(
+         {"Style reference": [wandb.Image(transforms.ToPILImage()(target_im))]}, step=0
+     )
 
-       # load discriminator for perceptual loss
-       discriminator = Discriminator(1024, 2).eval().to(device)
-       ckpt = torch.load(
-           "models/stylegan2-ffhq-config-f.pt", map_location=lambda storage, loc: storage
-       )
-       discriminator.load_state_dict(ckpt["d"], strict=False)
+   # load discriminator for perceptual loss
+   discriminator = Discriminator(1024, 2).eval().to(device)
+   ckpt = torch.load(
+     "models/stylegan2-ffhq-config-f.pt", map_location=lambda storage, loc: storage
+   )
+   discriminator.load_state_dict(ckpt["d"], strict=False)
 
-       # reset generator
-       del generator
-       generator = deepcopy(original_generator)
+   # reset generator
+   del generator
+   generator = deepcopy(original_generator)
 
-       g_optim = optim.Adam(generator.parameters(), lr=2e-3, betas=(0, 0.99))
+   g_optim = optim.Adam(generator.parameters(), lr=2e-3, betas=(0, 0.99))
 
-       # Which layers to swap for generating a family of plausible real images -> fake image
-       if preserve_color:
-           id_swap = [9, 11, 15, 16, 17]
-       else:
-           id_swap = list(range(7, generator.n_latent))
+   # Which layers to swap for generating a family of plausible real images -> fake image
+   if preserve_color:
+     id_swap = [9, 11, 15, 16, 17]
+   else:
+     id_swap = list(range(7, generator.n_latent))
 
-       for idx in tqdm(range(num_iter)):
-           mean_w = (
-               generator.get_latent(torch.randn([latents.size(0), latent_dim]).to(device))
-               .unsqueeze(1)
-               .repeat(1, generator.n_latent, 1)
-           )
-           in_latent = latents.clone()
-           in_latent[:, id_swap] = (
-               alpha * latents[:, id_swap] + (1 - alpha) * mean_w[:, id_swap]
-           )
+   for idx in tqdm(range(num_iter)):
+     mean_w = (
+         generator.get_latent(torch.randn([latents.size(0), latent_dim]).to(device))
+         .unsqueeze(1)
+         .repeat(1, generator.n_latent, 1)
+     )
+     in_latent = latents.clone()
+     in_latent[:, id_swap] = (
+         alpha * latents[:, id_swap] + (1 - alpha) * mean_w[:, id_swap]
+     )
 
-           img = generator(in_latent, input_is_latent=True)
+     img = generator(in_latent, input_is_latent=True)
 
-           with torch.no_grad():
-               real_feat = discriminator(targets)
-           fake_feat = discriminator(img)
+     with torch.no_grad():
+         real_feat = discriminator(targets)
+     fake_feat = discriminator(img)
 
-           loss = sum([F.l1_loss(a, b) for a, b in zip(fake_feat, real_feat)]) / len(fake_feat)
+     loss = sum([F.l1_loss(a, b) for a, b in zip(fake_feat, real_feat)]) / len(fake_feat)
 
-           if use_wandb:
-               wandb.log({"loss": loss}, step=idx)
-               if idx % log_interval == 0:
-                   generator.eval()
-                   my_sample = generator(my_w, input_is_latent=True)
-                   generator.train()
-                   my_sample = transforms.ToPILImage()(
-                       utils.make_grid(my_sample, normalize=True, range=(-1, 1))
-                   )
-                   wandb.log({"Current stylization": [wandb.Image(my_sample)]}, step=idx)
+     if use_wandb:
+         wandb.log({"loss": loss}, step=idx)
+         if idx % log_interval == 0:
+             generator.eval()
+             my_sample = generator(my_w, input_is_latent=True)
+             generator.train()
+             my_sample = transforms.ToPILImage()(
+                 utils.make_grid(my_sample, normalize=True, range=(-1, 1))
+             )
+             wandb.log({"Current stylization": [wandb.Image(my_sample)]}, step=idx)
 
-           g_optim.zero_grad()
-           loss.backward()
-           g_optim.step()
+     g_optim.zero_grad()
+     loss.backward()
+     g_optim.step()
      
 Bagian 4 - Generate Result
 --------------------------
 Ini merupakan tahap terakhir dari proses manipulasi gambar, yaitu dengan men-generate hasil dari pengaplikasian style kepada gambar input.
 
-.. code-block:
+.. code-block::
 
-    """
-    Bagian  : Generate Result - Tahap 4
-    Revisi  : 1
-    Tanggal : 2023/05/31
-    """
-    n_sample =  1
-    seed = 1000
+   """
+   Bagian  : Generate Result - Tahap 4
+   Revisi  : 1
+   Tanggal : 2023/05/31
+   """
+   n_sample =  1
+   seed = 1000
 
-    torch.manual_seed(seed)
-    with torch.no_grad():
-        generator.eval()
-        z = torch.randn(n_sample, latent_dim, device=device)
+   torch.manual_seed(seed)
+   with torch.no_grad():
+     generator.eval()
+     z = torch.randn(n_sample, latent_dim, device=device)
 
-        original_sample = original_generator([z], truncation=0.7, truncation_latent=mean_latent)
-        sample = generator([z], truncation=0.7, truncation_latent=mean_latent)
+     original_sample = original_generator([z], truncation=0.7, truncation_latent=mean_latent)
+     sample = generator([z], truncation=0.7, truncation_latent=mean_latent)
 
-        original_my_sample = original_generator(my_w, input_is_latent=True)
-        my_sample = generator(my_w, input_is_latent=True)
+     original_my_sample = original_generator(my_w, input_is_latent=True)
+     my_sample = generator(my_w, input_is_latent=True)
 
-    # display reference images
-    style_images = []
-    for name in names:
-        style_path = f'style_images_aligned/{strip_path_extension(name)}.png'
-        style_image = transform(Image.open(style_path))
-        style_images.append(style_image)
+   # display reference images
+   style_images = []
+   for name in names:
+     style_path = f'style_images_aligned/{strip_path_extension(name)}.png'
+     style_image = transform(Image.open(style_path))
+     style_images.append(style_image)
 
-    face = transform(aligned_face).to(device).unsqueeze(0)
-    style_images = torch.stack(style_images, 0).to(device)
-    st.image(transforms.ToPILImage()(utils.make_grid(style_images, normalize=True, range=(-1, 1))), caption="Style Reference", width=300)
+   face = transform(aligned_face).to(device).unsqueeze(0)
+   style_images = torch.stack(style_images, 0).to(device)
+   st.image(transforms.ToPILImage()(utils.make_grid(style_images, normalize=True, range=(-1, 1))), caption="Style Reference", width=300)
 
-    my_output = torch.cat([face, my_sample], 0)
-    st.image(transforms.ToPILImage()(utils.make_grid(my_output, normalize=True, range=(-1, 1))), caption="My sample", width=300)
+   my_output = torch.cat([face, my_sample], 0)
+   st.image(transforms.ToPILImage()(utils.make_grid(my_output, normalize=True, range=(-1, 1))), caption="My sample", width=300)

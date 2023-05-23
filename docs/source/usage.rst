@@ -32,5 +32,6 @@ For example:
 >>> lumache.get_random_ingredients()
 ['shells', 'gorgonzola', 'parsley']
 
-------------------------------------------
+TEST GAIS TEST GAIS
+-------------------
 
